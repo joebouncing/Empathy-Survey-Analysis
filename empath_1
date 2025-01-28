@@ -1,0 +1,133 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+import gdown
+import pandas as pd
+file_id = '1pyuTsv4A3N43ghvfEG_C4qqGDgoVn_1n'
+download_url = f'https://drive.google.com/uc?id={file_id}'
+output_file = 'empathy_responses_analysis.csv'
+gdown.download(download_url, output_file, quiet=False)
+df = pd.read_csv(output_file)
+print(df.head())
+df = df.dropna()
+df['gender'] = df['gender'].str.lower()
+categorical_features = ['gender', 'location'] + [f'response_{i}' for i in range(1, 21)]
+encoder = OneHotEncoder(sparse_output=False)
+encoded_features = encoder.fit_transform(df[categorical_features])
+encoded_df = pd.DataFrame(encoded_features, columns=encoder.get_feature_names_out(categorical_features))
+
+# Drop the original categorical columns and concatenate the encoded features
+df = df.drop(categorical_features, axis=1)
+df = pd.concat([df, encoded_df], axis=1)
+# Normalize or standardize numerical data
+numerical_features = ['age']
+scaler = StandardScaler()
+df[numerical_features] = scaler.fit_transform(df[numerical_features])
+# Display the cleaned and transformed DataFrame
+print("Cleaned and Transformed DataFrame:")
+print(df.head())
+# Save the cleaned and transformed dataset
+df.to_csv('cleaned_transformed_empathy_responses.csv', index=False)
+
+print("Data cleaning and transformation complete. Cleaned dataset saved as 'cleaned_transformed_empathy_responses.csv'")
+
+from google.colab import files
+files.download('cleaned_transformed_empathy_responses.csv')
+# Load the cleaned and transformed dataset
+df = pd.read_csv('cleaned_transformed_empathy_responses.csv')
+
+# Display the first few rows of the dataframe to understand its structure
+print("Cleaned and Transformed DataFrame:")
+print(df.head())
+
+# Function to plot distributions of empathy responses based on demographic factors
+def plot_distributions(df, feature, title):
+    plt.figure(figsize=(10, 6))
+    sns.histplot(data=df, x=feature, kde=True)
+    plt.title(title)
+    plt.xlabel(feature)
+    plt.ylabel('Frequency')
+    plt.show()
+
+# Plot distributions of age
+plot_distributions(df, 'age', 'Distribution of Age')
+
+# Function to plot average empathy scores based on demographic factors
+def plot_average_scores(df, demographic_feature, score_features, title):
+    avg_scores = df.groupby(demographic_feature)[score_features].mean().reset_index()
+    avg_scores = avg_scores.melt(id_vars=[demographic_feature], var_name='Question', value_name='Average Score')
+
+    plt.figure(figsize=(14, 8))
+    sns.barplot(data=avg_scores, x=demographic_feature, y='Average Score', hue='Question')
+    plt.title(title)
+    plt.xlabel(demographic_feature)
+    plt.ylabel('Average Score')
+    plt.legend(loc='upper right', bbox_to_anchor=(1.15, 1))
+    plt.show()
+
+
+
+# List of encoded response features
+response_features = [col for col in df.columns if col.startswith('response_')]
+
+# Plot average empathy scores based on gender
+plot_average_scores(df, 'gender_male', response_features, 'Average Empathy Scores by Gender')
+
+# Plot average empathy scores based on location (example with a few locations)
+selected_locations = ['location_London', 'location_Manchester', 'location_Birmingham']
+df_selected_locations = df[df[selected_locations].any(axis=1)]
+plot_average_scores(df_selected_locations, 'location_London', response_features, 'Average Empathy Scores by Location (London)')
+
+# Statistical Analysis: ANOVA to compare empathy levels across different age groups
+# Create age groups
+df['age_group'] = pd.cut(df['age'], bins=[20, 25, 30, 35, 40], labels=['20-25', '25-30', '30-35', '35-40'])
+
+
+
+# Perform ANOVA
+anova_results = {}
+for feature in response_features:
+    anova = stats.f_oneway(
+        df[df['age_group'] == '20-25'][feature],
+        df[df['age_group'] == '25-30'][feature],
+        df[df['age_group'] == '30-35'][feature],
+        df[df['age_group'] == '35-40'][feature]
+    )
+    anova_results[feature] = anova
+
+# Display ANOVA results
+print("\nANOVA Results:")
+for feature, result in anova_results.items():
+    print(f"{feature}: F-statistic={result.statistic:.2f}, p-value={result.pvalue:.4f}")
+
+# Interpretation: If p-value < 0.05, there is a significant difference in empathy levels across age groups for that question
+
+
+def plot_correlation_heatmap(df, features, title):
+    plt.figure(figsize=(14, 12))
+    correlation_matrix = df[features].corr()
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5)
+    plt.title(title)
+    plt.show()
+
+# Plot correlation heatmap of empathy responses
+plot_correlation_heatmap(df, response_features, 'Correlation Heatmap of Empathy Responses')
+
+def plot_box_plots(df, demographic_feature, score_features, title):
+    melted_df = df.melt(id_vars=[demographic_feature], value_vars=score_features, var_name='Question', value_name='Score')
+
+    plt.figure(figsize=(14, 8))
+    sns.boxplot(data=melted_df, x=demographic_feature, y='Score', hue='Question')
+    plt.title(title)
+    plt.xlabel(demographic_feature)
+    plt.ylabel('Score')
+    plt.legend(loc='upper right', bbox_to_anchor=(1.15, 1))
+    plt.show()
+
+plot_box_plots(df, 'gender_male', response_features, 'Box Plots of Empathy Responses by Gender')
+plot_box_plots(df_selected_locations, 'location_London', response_features, 'Box Plots of Empathy Responses by Location (London)')
+
+
+
